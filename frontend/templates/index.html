@@ -4,14 +4,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Askloom</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Askloom | Dashboard</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
 </head>
 <body>
-    <main>
-        <h1>Welcome to Askloom</h1>
-        <p>Your AI-powered quiz experience starts here.</p>
+    <aside class="sidebar">
+        <h2 class="brand">Askloom<span>.</span></h2>
+
+        <nav>
+            <a href="/" class="nav-link active">Dashboard</a>
+            <a href="#assessments" class="nav-link">My Assessments</a>
+            <a href="#profile" class="nav-link">Profile</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            AI-powered learning
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">YOUR LEARNING SPACE</p>
+                <h1>Dashboard</h1>
+            </div>
+
+            <div class="user-avatar" title="User profile">U</div>
+        </header>
+
+        <section class="welcome-section">
+            <div>
+                <p class="eyebrow">WELCOME TO ASKLOOM</p>
+                <h2>Learn something new today.</h2>
+                <p>Practice your knowledge with AI-generated assessments.</p>
+            </div>
+
+            <button id="start-assessment"  onclick="showQuizSetup()">
+                Start an assessment →
+            </button>
+        </section>
+
+        <section class="stats-grid">
+            <article class="stat-card">
+                <p>Total assessments</p>
+                <h2 id="total-assessments">0</h2>
+                <span>Assessments attempted</span>
+            </article>
+
+            <article class="stat-card">
+                <p>Completed</p>
+                <h2 id="completed-assessments">0</h2>
+                <span>Assessments completed</span>
+            </article>
+
+            <article class="stat-card">
+                <p>Average score</p>
+                <h2 id="average-score">—</h2>
+                <span>Across completed assessments</span>
+            </article>
+        </section>
+
+        <section id="assessments" class="history-section">
+            <div class="section-heading">
+                <div>
+                    <h2>Recent assessments</h2>
+                    <p>Track your learning progress over time.</p>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Assessment</th>
+                            <th>Date</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="assessment-history">
+                        <tr>
+                            <td colspan="4" class="empty-state">
+                                No assessments yet. Start your first
+                                assessment to see your progress here.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <footer id="profile" class="page-footer">
+            Askloom · Learn, practice, improve.
+        </footer>
+        <section id="quiz-setup" class="history-section" hidden>
+            <div class="section-heading">
+                <h2>Create an assessment</h2>
+                <p>Choose what you want to practice today.</p>
+            </div>
+
+            <form id="quiz-form">
+                <label for="topic">Topic</label>
+                <input
+                    type="text"
+                    id="topic"
+                    name="topic"
+                    placeholder="e.g. Python, SQL, Machine Learning"
+                    maxlength="100"
+                >
+
+                <label for="difficulty">Difficulty</label>
+                <select id="difficulty" name="difficulty">
+                    <option value="Easy">Easy</option>
+                    <option value="Medium" selected>Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+
+                <button type="submit" class="primary-button">
+                    Generate questions →
+                </button>
+            </form>
+        </section>
+        
+        <section id="quiz-screen" class="history-section" hidden>
+            <div class="section-heading">
+                <p class="eyebrow">YOUR ASSESSMENT</p>
+                <h2 id="quiz-topic">Quiz</h2>
+                <p id="question-progress">Question 1 of 5</p>
+            </div>
+
+            <div class="progress-track">
+                <div id="progress-bar"></div>
+            </div>
+
+            <div class="question-container">
+                <h3 id="question-text"></h3>
+                <div id="answer-options"></div>
+            </div>
+
+            <div class="quiz-navigation">
+                <button type="button" id="previous-question" class="secondary-button">
+                    ← Previous
+                </button>
+
+                <button type="button" id="next-question" class="primary-button">
+                    Next →
+                </button>
+            </div>
+        </section>
+        
+        <section id="results-screen" class="history-section" hidden>
+            <div class="section-heading">
+                <p class="eyebrow">ASSESSMENT COMPLETED</p>
+                <h2>Your results</h2>
+                <p>Here's how you performed in this assessment.</p>
+            </div>
+
+            <div class="results-summary">
+                <div class="result-card">
+                    <p>Your score</p>
+                    <h3 id="result-score">0 / 5</h3>
+                </div>
+
+                <div class="result-card">
+                    <p>Percentage</p>
+                    <h3 id="result-percentage">0%</h3>
+                </div>
+            </div>
+
+            <p id="result-summary" class="result-message"></p>
+
+            <button type="button" id="try-again" class="primary-button">
+                Try another assessment →
+            </button>
+        </section>
+
     </main>
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
