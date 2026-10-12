@@ -1,0 +1,21 @@
+# Askloom starter file: frontend/static/css/style.css
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 2rem;
+    background-color: #f4f7fb;
+    color: #1f2937;
+}
+
+main {
+    max-width: 800px;
+    margin: 3rem auto;
+    padding: 2rem;
+    background-color: white;
+    border-radius: 12px;
+}
+
+h1 {
+    color: #2563eb;
+}

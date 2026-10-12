@@ -1,0 +1,28 @@
+
+# Askloom - Python dependencies
+# Python version: 3.12.x
+
+# Frontend
+Flask==3.1.2
+
+# Backend API
+fastapi==0.119.0
+uvicorn[standard]==0.37.0
+
+# Data validation
+pydantic==2.12.0
+
+# Database
+SQLAlchemy==2.0.44
+psycopg[binary]==3.2.10
+alembic==1.17.0
+
+# Environment configuration
+python-dotenv==1.1.1
+
+# LLM integration
+groq==0.32.0
+
+# Testing
+pytest==8.4.2
+httpx==0.28.1
