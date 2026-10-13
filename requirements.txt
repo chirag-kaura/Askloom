@@ -26,3 +26,6 @@ groq==0.32.0
 # Testing
 pytest==8.4.2
 httpx==0.28.1
+
+
+Authlib==1.8.0
