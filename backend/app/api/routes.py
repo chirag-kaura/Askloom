@@ -118,26 +118,40 @@ def generate_quiz(
         ) from exc
 
 
+
 @router.post("/submit")
 def submit_quiz(
     submission: QuizAnswerSubmission,
     db: Session = Depends(get_db),
 ):
-    """Score a quiz using stored answer keys and save the result."""
+    """Score a quiz, save the submission, and return detailed results."""
+
+    # 1. Find the assessment.
     assessment = db.get(Assessment, submission.quiz_id)
 
     if assessment is None:
         raise HTTPException(status_code=404, detail="Quiz not found.")
 
+    # 2. Verify that this assessment belongs to the current user.
     if assessment.user_id != DEV_USER_ID:
-        raise HTTPException(status_code=403, detail="Quiz does not belong to this user.")
+        raise HTTPException(
+            status_code=403,
+            detail="Quiz does not belong to this user.",
+        )
 
+    # 3. Prevent duplicate submissions.
     if assessment.status != "in_progress":
-        raise HTTPException(status_code=409, detail="This quiz has already been submitted.")
+        raise HTTPException(
+            status_code=409,
+            detail="This quiz has already been submitted.",
+        )
 
+    # 4. Retrieve all five answer records in question order.
     answers = db.scalars(
         select(AssessmentAnswer)
-        .where(AssessmentAnswer.assessment_id == assessment.assessment_id)
+        .where(
+            AssessmentAnswer.assessment_id == assessment.assessment_id
+        )
         .order_by(AssessmentAnswer.slot_number)
     ).all()
 
@@ -151,27 +165,34 @@ def submit_quiz(
     correct_count = 0
     submitted_at = datetime.now(timezone.utc)
 
-    for answer_record, selected in zip(answers, submission.selected_answers):
+    # 5. Validate and save the user's five answers.
+    for answer_record, selected in zip(
+        answers, submission.selected_answers
+    ):
         selected_letter = None
 
         if selected is not None:
-            # Accept either A/B/C/D or the exact displayed option text.
             normalized = selected.strip()
+
             if normalized.upper() in valid_options:
                 selected_letter = normalized.upper()
             else:
-                question = db.get(QuestionRecord, answer_record.question_id)
+                question = db.get(
+                    QuestionRecord, answer_record.question_id
+                )
+
                 option_map = {
                     "A": question.option_a,
                     "B": question.option_b,
                     "C": question.option_c,
                     "D": question.option_d,
                 }
+
                 selected_letter = next(
                     (
                         letter
-                        for letter, text in option_map.items()
-                        if text == normalized
+                        for letter, option_text in option_map.items()
+                        if option_text == normalized
                     ),
                     None,
                 )
@@ -179,7 +200,10 @@ def submit_quiz(
             if selected_letter is None:
                 raise HTTPException(
                     status_code=422,
-                    detail="Each answer must be A, B, C, D, or an exact displayed option.",
+                    detail=(
+                        "Each answer must be A, B, C, D, "
+                        "or an exact displayed option."
+                    ),
                 )
 
         answer_record.selected_answer = selected_letter
@@ -193,10 +217,14 @@ def submit_quiz(
         if answer_record.is_correct:
             correct_count += 1
 
+    # 6. Update the assessment summary.
+    total_questions = len(answers)
+
     assessment.score = correct_count
     assessment.status = "completed"
     assessment.completed_at = submitted_at
 
+    # 7. Save the submission before returning correct answers.
     try:
         db.commit()
     except Exception as exc:
@@ -206,11 +234,67 @@ def submit_quiz(
             detail="Could not save quiz submission.",
         ) from exc
 
-    return {
-        "score": correct_count,
-        "total_questions": len(answers),
-        "percentage": round(correct_count / len(answers) * 100, 2),
-        "correct_count": correct_count,
-        "incorrect_count": len(answers) - correct_count,
-    }
+    # 8. Build the detailed review from stored database records.
+    question_reviews = []
 
+    for answer_record in answers:
+        question = db.get(
+            QuestionRecord, answer_record.question_id
+        )
+
+        if question is None:
+            raise HTTPException(
+                status_code=500,
+                detail="A question record could not be found.",
+            )
+
+        option_map = {
+            "A": question.option_a,
+            "B": question.option_b,
+            "C": question.option_c,
+            "D": question.option_d,
+        }
+
+        correct_letter = answer_record.correct_answer_snapshot
+        selected_letter = answer_record.selected_answer
+
+        options = [
+            {
+                "label": letter,
+                "text": option_text,
+                "is_correct": letter == correct_letter,
+                "is_selected": letter == selected_letter,
+            }
+            for letter, option_text in option_map.items()
+        ]
+
+        question_reviews.append(
+            {
+                "question_number": answer_record.slot_number,
+                "question": question.question_text,
+                "options": options,
+                "selected_answer": selected_letter,
+                "selected_answer_text": (
+                    option_map.get(selected_letter)
+                    if selected_letter is not None
+                    else None
+                ),
+                "correct_answer": correct_letter,
+                "correct_answer_text": option_map[correct_letter],
+                "is_correct": bool(answer_record.is_correct),
+                "explanation": question.explanation,
+            }
+        )
+
+    # 9. Return the summary and all five question reviews.
+    return {
+        "quiz_id": assessment.assessment_id,
+        "score": correct_count,
+        "total_questions": total_questions,
+        "percentage": round(
+            correct_count / total_questions * 100, 2
+        ),
+        "correct_count": correct_count,
+        "incorrect_count": total_questions - correct_count,
+        "questions": question_reviews,
+    }
