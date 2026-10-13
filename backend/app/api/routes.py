@@ -1,91 +1,216 @@
 
-from uuid import uuid4
 
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-
-from fastapi import APIRouter, HTTPException
-
+from backend.app.db.database import get_db
+from backend.app.models import (
+    Assessment,
+    AssessmentAnswer,
+    QuestionRecord,
+    User,
+)
 from backend.app.schemas.question import (
-    Question,
-    QuizGenerationRequest,
     PublicQuestion,
+    QuizGenerationRequest,
     QuizGenerationResponse,
 )
 from backend.app.services.llm_service import generate_questions
 
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
-# Temporary storage until PostgreSQL is integrated.
-quiz_store: dict[str, list[Question]] = {}
-
-
-@router.post("/generate", response_model=QuizGenerationResponse)
-def generate_quiz(request: QuizGenerationRequest):
-    """Generate a quiz and keep its answer key on the backend."""
-    try:
-        questions = generate_questions(
-            topic=request.topic,
-            difficulty=request.difficulty,
-        )
-
-        quiz_id = str(uuid4())
-        quiz_store[quiz_id] = questions
-
-        public_questions = [
-            PublicQuestion(
-                question=question.question,
-                options=question.options,
-            )
-            for question in questions
-        ]
-
-        return QuizGenerationResponse(
-            quiz_id=quiz_id,
-            questions=public_questions,
-        )
-
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Question generation failed. Please try again.",
-        ) from exc
+# Temporary development user. Replace with authenticated user ID after login.
+DEV_USER_ID = 1
 
 
 class QuizAnswerSubmission(BaseModel):
-    quiz_id: str
+    quiz_id: int
     selected_answers: list[str | None] = Field(
         min_length=5,
         max_length=5,
     )
 
 
-@router.post("/submit")
-def submit_quiz(submission: QuizAnswerSubmission):
-    """Score a completed quiz using the backend's answer key."""
-    questions = quiz_store.get(submission.quiz_id)
-
-    if questions is None:
+@router.post("/generate", response_model=QuizGenerationResponse)
+def generate_quiz(
+    request: QuizGenerationRequest,
+    db: Session = Depends(get_db),
+):
+    """Generate five questions and persist the assessment in PostgreSQL."""
+    user = db.get(User, DEV_USER_ID)
+    if user is None:
         raise HTTPException(
-            status_code=404,
-            detail="Quiz not found. Please generate a new quiz.",
+            status_code=400,
+            detail="Development user not found. Create the test user first.",
         )
 
-    correct_count = sum(
-        1
-        for question, answer in zip(
-            questions,
-            submission.selected_answers,
+    try:
+        generated_questions = generate_questions(
+            topic=request.topic,
+            difficulty=request.difficulty,
         )
-        if answer is not None and answer == question.correct_answer
-    )
 
-    total_questions = len(questions)
+        assessment = Assessment(
+            user_id=user.user_id,
+            difficulty=request.difficulty,
+            total_questions=5,
+            status="in_progress",
+        )
+        db.add(assessment)
+        db.flush()
+
+        public_questions = []
+
+        for slot_number, generated in enumerate(generated_questions, start=1):
+            # Store answer choices as A, B, C, D so the database can
+            # record a compact answer key and submitted option consistently.
+            question_record = QuestionRecord(
+                question_text=generated.question,
+                option_a=generated.options[0],
+                option_b=generated.options[1],
+                option_c=generated.options[2],
+                option_d=generated.options[3],
+                correct_option=chr(65 + generated.options.index(generated.correct_answer)),
+                explanation=generated.explanation,
+                topic=request.topic,
+                difficulty=request.difficulty,
+            )
+            db.add(question_record)
+            db.flush()
+
+            db.add(
+                AssessmentAnswer(
+                    assessment_id=assessment.assessment_id,
+                    slot_number=slot_number,
+                    question_id=question_record.question_id,
+                    question_version=1,
+                    regeneration_count=0,
+                    correct_answer_snapshot=question_record.correct_option,
+                )
+            )
+
+            public_questions.append(
+                PublicQuestion(
+                    question=generated.question,
+                    options=generated.options,
+                )
+            )
+
+        db.commit()
+
+        return QuizGenerationResponse(
+            quiz_id=str(assessment.assessment_id),
+            questions=public_questions,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail="Question generation or database saving failed. Please try again.",
+        ) from exc
+
+
+@router.post("/submit")
+def submit_quiz(
+    submission: QuizAnswerSubmission,
+    db: Session = Depends(get_db),
+):
+    """Score a quiz using stored answer keys and save the result."""
+    assessment = db.get(Assessment, submission.quiz_id)
+
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Quiz not found.")
+
+    if assessment.user_id != DEV_USER_ID:
+        raise HTTPException(status_code=403, detail="Quiz does not belong to this user.")
+
+    if assessment.status != "in_progress":
+        raise HTTPException(status_code=409, detail="This quiz has already been submitted.")
+
+    answers = db.scalars(
+        select(AssessmentAnswer)
+        .where(AssessmentAnswer.assessment_id == assessment.assessment_id)
+        .order_by(AssessmentAnswer.slot_number)
+    ).all()
+
+    if len(answers) != 5:
+        raise HTTPException(
+            status_code=409,
+            detail="This quiz does not contain exactly five questions.",
+        )
+
+    valid_options = {"A", "B", "C", "D"}
+    correct_count = 0
+    submitted_at = datetime.now(timezone.utc)
+
+    for answer_record, selected in zip(answers, submission.selected_answers):
+        selected_letter = None
+
+        if selected is not None:
+            # Accept either A/B/C/D or the exact displayed option text.
+            normalized = selected.strip()
+            if normalized.upper() in valid_options:
+                selected_letter = normalized.upper()
+            else:
+                question = db.get(QuestionRecord, answer_record.question_id)
+                option_map = {
+                    "A": question.option_a,
+                    "B": question.option_b,
+                    "C": question.option_c,
+                    "D": question.option_d,
+                }
+                selected_letter = next(
+                    (
+                        letter
+                        for letter, text in option_map.items()
+                        if text == normalized
+                    ),
+                    None,
+                )
+
+            if selected_letter is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Each answer must be A, B, C, D, or an exact displayed option.",
+                )
+
+        answer_record.selected_answer = selected_letter
+        answer_record.is_correct = (
+            selected_letter == answer_record.correct_answer_snapshot
+            if selected_letter is not None
+            else False
+        )
+        answer_record.answered_at = submitted_at
+
+        if answer_record.is_correct:
+            correct_count += 1
+
+    assessment.score = correct_count
+    assessment.status = "completed"
+    assessment.completed_at = submitted_at
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save quiz submission.",
+        ) from exc
 
     return {
         "score": correct_count,
-        "total_questions": total_questions,
-        "percentage": round((correct_count / total_questions) * 100, 2),
+        "total_questions": len(answers),
+        "percentage": round(correct_count / len(answers) * 100, 2),
         "correct_count": correct_count,
-        "incorrect_count": total_questions - correct_count,
+        "incorrect_count": len(answers) - correct_count,
     }
+
