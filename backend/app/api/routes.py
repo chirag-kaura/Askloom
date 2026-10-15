@@ -1,5 +1,7 @@
 
+import logging
 
+logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -110,12 +112,17 @@ def generate_quiz(
     except HTTPException:
         db.rollback()
         raise
+    
     except Exception as exc:
+       # import logging
+
+        logger.exception("Quiz generation or database saving failed")
         db.rollback()
         raise HTTPException(
-            status_code=502,
-            detail="Question generation or database saving failed. Please try again.",
-        ) from exc
+        status_code=502,
+        detail="Question generation or database saving failed. Please try again.",
+    ) from exc
+
 
 
 
