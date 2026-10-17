@@ -33,7 +33,42 @@
                 <h1>Dashboard</h1>
             </div>
 
-            <div class="user-avatar" title="User profile">U</div>
+            <div class="profile-container">
+                <button
+                    type="button"
+                    id="profile-button"
+                    class="user-avatar"
+                    aria-label="Open user profile"
+                    aria-expanded="false"
+                >
+                    U
+                </button>
+
+                <div id="profile-dropdown" class="profile-dropdown" hidden>
+                    <div class="profile-details">
+                        <img
+                            id="profile-picture"
+                            class="profile-picture"
+                            src=""
+                            alt="Google profile"
+                            hidden
+                        >
+                        <div>
+                            <p id="profile-name">Guest</p>
+                            <p id="profile-email"></p>
+                        </div>
+                    </div>
+
+                    <button type="button" id="google-login-button">
+                        Sign in with Google
+                    </button>
+
+                    <button type="button" id="logout-button" hidden>
+                        Sign out
+                    </button>
+                </div>
+            </div>
+
         </header>
 
         <section class="welcome-section">
@@ -110,13 +145,29 @@
 
             <form id="quiz-form">
                 <label for="topic">Topic</label>
-                <input
-                    type="text"
-                    id="topic"
-                    name="topic"
-                    placeholder="e.g. Python, SQL, Machine Learning"
-                    maxlength="100"
-                >
+                <select id="topic" name="topic" required>
+                    <option value="Python Programming">Python Programming</option>
+                    <option value="Data Science & Machine Learning">
+                        Data Science & Machine Learning
+                    </option>
+                    <option value="Generative AI & LLMs">Generative AI & LLMs</option>
+                    <option value="SQL & Databases">SQL & Databases</option>
+                    <option value="Statistics & Probability">
+                        Statistics & Probability
+                    </option>
+                    <option value="Other">Other</option>
+                </select>
+
+                <div id="custom-topic-container" hidden>
+                    <label for="custom-topic">Enter your topic</label>
+                    <input
+                        type="text"
+                        id="custom-topic"
+                        name="custom-topic"
+                        placeholder="Enter a topic to practice"
+                        maxlength="100"
+                    >
+                </div>
 
                 <label for="difficulty">Difficulty</label>
                 <select id="difficulty" name="difficulty">

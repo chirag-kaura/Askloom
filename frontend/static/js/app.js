@@ -4,6 +4,25 @@ const quizForm = document.getElementById("quiz-form");
 const quizScreen = document.getElementById("quiz-screen");
 const resultsScreen = document.getElementById("results-screen");
 
+const topicSelect = document.getElementById("topic");
+const customTopicContainer = document.getElementById(
+    "custom-topic-container"
+);
+const customTopicInput = document.getElementById("custom-topic");
+
+topicSelect.addEventListener("change", function () {
+    const isOther = topicSelect.value === "Other";
+
+    customTopicContainer.hidden = !isOther;
+    customTopicInput.required = isOther;
+
+    if (!isOther) {
+        customTopicInput.value = "";
+    }
+});
+
+
+
 let questions = [];
 let currentQuestionIndex = 0;
 let selectedAnswers = [];
@@ -38,11 +57,22 @@ quizForm.addEventListener("submit", async function (event) {
     event.preventDefault();
 
     const topicInput = document.getElementById("topic");
+    const customTopicInput = document.getElementById("custom-topic");
     const difficultyInput = document.getElementById("difficulty");
     const submitButton = quizForm.querySelector('button[type="submit"]');
 
-    const topic = topicInput.value.trim() || "General Knowledge";
+    const topic = topicInput.value === "Other"
+        ? customTopicInput.value.trim()
+        : topicInput.value;
+
     const difficulty = difficultyInput.value;
+
+    if (!topic) {
+        customTopicInput.setCustomValidity("Please enter a topic.");
+        customTopicInput.reportValidity();
+        customTopicInput.setCustomValidity("");
+        return;
+    }
 
     submitButton.disabled = true;
     submitButton.textContent = "Generating questions...";
@@ -50,6 +80,7 @@ quizForm.addEventListener("submit", async function (event) {
     try {
         const response = await fetch("http://127.0.0.1:8000/quiz/generate", {
             method: "POST",
+            credentials: "include",
             headers: {
                 "Content-Type": "application/json"
             },
@@ -93,6 +124,129 @@ quizForm.addEventListener("submit", async function (event) {
         submitButton.textContent = "Generate questions →";
     }
 });
+
+
+
+// ================================
+// Google Authentication - Profile
+// ================================
+
+const profileButton = document.getElementById("profile-button");
+const profileDropdown = document.getElementById("profile-dropdown");
+const profileName = document.getElementById("profile-name");
+const profileEmail = document.getElementById("profile-email");
+const profilePicture = document.getElementById("profile-picture");
+const googleLoginButton = document.getElementById("google-login-button");
+const logoutButton = document.getElementById("logout-button");
+
+const AUTH_API = "http://127.0.0.1:8000";
+
+async function loadUserProfile() {
+    try {
+        const response = await fetch(`${AUTH_API}/auth/me`, {
+            credentials: "include"
+        });
+
+        if (!response.ok) {
+            if (response.status !== 401) {
+                console.error("Could not load user profile.");
+            }
+
+            showLoggedOutProfile();
+            return;
+        }
+
+        const data = await response.json();
+        const user = data.user;
+
+        profileName.textContent = user.name || "Google User";
+        profileEmail.textContent = user.email || "";
+
+        if (user.picture) {
+            profilePicture.src = user.picture;
+            profilePicture.hidden = false;
+            profileButton.innerHTML = "";
+            const avatarImage = document.createElement("img");
+            avatarImage.src = user.picture;
+            avatarImage.alt = "";
+            profileButton.appendChild(avatarImage);
+        } else {
+            profilePicture.hidden = true;
+            profileButton.textContent =
+                (user.name || "U").trim().charAt(0).toUpperCase();
+        }
+
+        googleLoginButton.hidden = true;
+        logoutButton.hidden = false;
+    } catch (error) {
+        console.error("Authentication status check failed:", error);
+        showLoggedOutProfile();
+    }
+}
+
+function showLoggedOutProfile() {
+    profileName.textContent = "Guest";
+    profileEmail.textContent = "";
+
+    profilePicture.hidden = true;
+    profileButton.textContent = "U";
+
+    googleLoginButton.hidden = false;
+    logoutButton.hidden = true;
+}
+
+profileButton.addEventListener("click", () => {
+    const isOpening = profileDropdown.hidden;
+
+    profileDropdown.hidden = !isOpening;
+    profileButton.setAttribute("aria-expanded", String(isOpening));
+});
+
+googleLoginButton.addEventListener("click", () => {
+    window.location.href = `${AUTH_API}/auth/google/login`;
+});
+
+logoutButton.addEventListener("click", async () => {
+    logoutButton.disabled = true;
+    logoutButton.textContent = "Signing out...";
+
+    try {
+        const response = await fetch(`${AUTH_API}/auth/logout`, {
+            method: "POST",
+            credentials: "include"
+        });
+
+        if (!response.ok) {
+            throw new Error("Could not sign out. Please try again.");
+        }
+
+        showLoggedOutProfile();
+        profileDropdown.hidden = true;
+        profileButton.setAttribute("aria-expanded", "false");
+    } catch (error) {
+        console.error("Logout failed:", error);
+        alert(error.message || "Could not sign out.");
+    } finally {
+        logoutButton.disabled = false;
+        logoutButton.textContent = "Sign out";
+    }
+});
+
+document.addEventListener("click", (event) => {
+    if (
+        !event.target.closest(".profile-container") &&
+        !profileDropdown.hidden
+    ) {
+        profileDropdown.hidden = true;
+        profileButton.setAttribute("aria-expanded", "false");
+    }
+});
+
+// Check the current session when the dashboard loads.
+loadUserProfile();
+
+
+
 
 function renderQuestion() {
     const question = questions[currentQuestionIndex];
@@ -173,6 +327,7 @@ document.getElementById("next-question").addEventListener("click", async () => {
     try {
         const response = await fetch("http://127.0.0.1:8000/quiz/submit", {
             method: "POST",
+            credentials: "include",
             headers: {
                 "Content-Type": "application/json"
             },
@@ -352,3 +507,4 @@ document.getElementById("try-again").addEventListener("click", () => {
 
     document.getElementById("topic").focus();
 });
+

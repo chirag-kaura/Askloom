@@ -1,10 +1,7 @@
 
-import logging
 
-logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,10 +20,23 @@ from backend.app.schemas.question import (
 )
 from backend.app.services.llm_service import generate_questions
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
-# Temporary development user. Replace with authenticated user ID after login.
-DEV_USER_ID = 1
+def get_authenticated_user_id(request: Request) -> int:
+    """Return the database ID of the authenticated user."""
+    user = request.session.get("user")
+
+    if not user or not user.get("user_id"):
+        raise HTTPException(
+            status_code=401,
+            detail="Please sign in to continue.",
+        )
+
+    return int(user["user_id"])
 
 
 class QuizAnswerSubmission(BaseModel):
@@ -39,26 +49,30 @@ class QuizAnswerSubmission(BaseModel):
 
 @router.post("/generate", response_model=QuizGenerationResponse)
 def generate_quiz(
-    request: QuizGenerationRequest,
+    quiz_request: QuizGenerationRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Generate five questions and persist the assessment in PostgreSQL."""
-    user = db.get(User, DEV_USER_ID)
+    """Generate five questions for the authenticated user."""
+    user_id = get_authenticated_user_id(request)
+    user = db.get(User, user_id)
+
     if user is None:
+        request.session.clear()
         raise HTTPException(
-            status_code=400,
-            detail="Development user not found. Create the test user first.",
+            status_code=401,
+            detail="User account not found. Please sign in again.",
         )
 
     try:
         generated_questions = generate_questions(
-            topic=request.topic,
-            difficulty=request.difficulty,
+            topic=quiz_request.topic,
+            difficulty=quiz_request.difficulty,
         )
 
         assessment = Assessment(
             user_id=user.user_id,
-            difficulty=request.difficulty,
+            difficulty=quiz_request.difficulty,
             total_questions=5,
             status="in_progress",
         )
@@ -78,8 +92,8 @@ def generate_quiz(
                 option_d=generated.options[3],
                 correct_option=chr(65 + generated.options.index(generated.correct_answer)),
                 explanation=generated.explanation,
-                topic=request.topic,
-                difficulty=request.difficulty,
+                topic=quiz_request.topic,
+                difficulty=quiz_request.difficulty,
             )
             db.add(question_record)
             db.flush()
@@ -118,6 +132,8 @@ def generate_quiz(
 
         logger.exception("Quiz generation or database saving failed")
         db.rollback()
+        logger.exception("Quiz generation or database saving failed")
+
         raise HTTPException(
         status_code=502,
         detail="Question generation or database saving failed. Please try again.",
@@ -129,18 +145,31 @@ def generate_quiz(
 @router.post("/submit")
 def submit_quiz(
     submission: QuizAnswerSubmission,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Score a quiz, save the submission, and return detailed results."""
 
-    # 1. Find the assessment.
+    user_id = get_authenticated_user_id(request)
+    user = db.get(User, user_id)
+
+    if user is None:
+        request.session.clear()
+        raise HTTPException(
+            status_code=401,
+            detail="User account not found. Please sign in again.",
+        )
+
     assessment = db.get(Assessment, submission.quiz_id)
 
     if assessment is None:
         raise HTTPException(status_code=404, detail="Quiz not found.")
-
-    # 2. Verify that this assessment belongs to the current user.
-    if assessment.user_id != DEV_USER_ID:
+    
+    print(
+    f"OWNERSHIP CHECK: assessment_id={assessment.assessment_id}, "
+    f"owner_id={assessment.user_id}, current_user_id={user.user_id}"
+)
+    if assessment.user_id != user.user_id:
         raise HTTPException(
             status_code=403,
             detail="Quiz does not belong to this user.",

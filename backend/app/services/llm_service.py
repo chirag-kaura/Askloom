@@ -29,60 +29,32 @@ def generate_questions(
     """Generate five validated quiz questions using Groq."""
 
     prompt = f"""
-Generate exactly 5 multiple-choice quiz questions.
+You are an experienced assessment designer responsible for creating
+accurate, fair, and educational multiple-choice assessments.
 
 Topic: {topic}
 Difficulty: {difficulty}
 
-Return a JSON object with a single key named "questions".
-Its value must be an array containing exactly 5 questions.
-
-Each question must contain:
+Return ONLY a valid JSON array. Each item must contain:
 - question: a non-empty question
 - options: exactly 4 distinct answer options
 - correct_answer: exactly one option from options
 - explanation: a short explanation of the correct answer
 
-Ensure every correct_answer exactly matches one of its options.
-Do not include Markdown fences or text outside the JSON object.
+Do not include Markdown fences or text outside the JSON.
 """
 
-    response = None
-
-    for attempt in range(MAX_ATTEMPTS):
-        try:
-            response = client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                response_format={"type": "json_object"},
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You generate accurate educational quiz "
-                            "questions. Return only valid JSON with "
-                            'a single "questions" array containing '
-                            "exactly five question objects."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                temperature=0.3,
-            )
-            break
-
-        except RateLimitError:
-            if attempt == MAX_ATTEMPTS - 1:
-                raise
-
-            # Bounded exponential backoff with small random jitter.
-            delay = (2 ** (attempt + 1)) + random.uniform(0, 1)
-            time.sleep(delay)
-
-    if response is None:
-        raise RuntimeError("Groq did not return a response.")
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {
+                "role": "system",
+                "content": "You generate accurate educational quiz questions as JSON.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.3,
+    )
 
     content = response.choices[0].message.content
 
