@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,107 +15,300 @@
         <h2 class="brand">Askloom<span>.</span></h2>
 
         <nav>
-            <a href="/" class="nav-link active">Dashboard</a>
-            <a href="#assessments" class="nav-link">My Assessments</a>
-            <a href="#profile" class="nav-link">Profile</a>
+            <a href="/" class="nav-link active" data-view="dashboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+                Dashboard
+            </a>
+            <a href="#assessments" class="nav-link" data-view="assessments">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+                My Assessments
+            </a>
+            <a href="#profile" class="nav-link" data-view="profile">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+                Profile
+            </a>
         </nav>
 
         <div class="sidebar-footer">
-            AI-powered learning
+            Askloom · AI Learning
         </div>
     </aside>
 
     <main class="main-content">
         <header class="topbar">
             <div>
-                <p class="eyebrow">YOUR LEARNING SPACE</p>
-                <h1>Dashboard</h1>
+                <p id="topbar-eyebrow" class="eyebrow">YOUR LEARNING SPACE</p>
+                <h1 id="topbar-title">Dashboard</h1>
             </div>
 
-            <div class="user-avatar" title="User profile">U</div>
+            <div class="profile-container">
+                <button
+                    type="button"
+                    id="profile-button"
+                    class="user-avatar"
+                    aria-label="Open user profile"
+                    aria-expanded="false"
+                >
+                    U
+                </button>
+
+                <div id="profile-dropdown" class="profile-dropdown" hidden>
+                    <div class="profile-details">
+                        <img
+                            id="profile-picture"
+                            class="profile-picture"
+                            src=""
+                            alt="Google profile"
+                            hidden
+                        >
+                        <div>
+                            <p id="profile-name">Guest</p>
+                            <p id="profile-email"></p>
+                        </div>
+                    </div>
+
+                    <button type="button" id="google-login-button">
+                        Sign in with Google
+                    </button>
+
+                    <button type="button" id="logout-button" hidden>
+                        Sign out
+                    </button>
+                </div>
+            </div>
         </header>
 
-        <section class="welcome-section">
-            <div>
-                <p class="eyebrow">WELCOME TO ASKLOOM</p>
-                <h2>Learn something new today.</h2>
-                <p>Practice your knowledge with AI-generated assessments.</p>
+        <!-- VIEW 1: DASHBOARD -->
+        <div id="view-dashboard" class="app-view">
+            <section class="welcome-section">
+                <div>
+                    <p class="eyebrow">WELCOME TO ASKLOOM</p>
+                    <h2 id="welcome-greeting">Learn something new today.</h2>
+                    <p id="welcome-subtext">Practice your knowledge with AI-generated assessments.</p>
+                </div>
+
+                <button id="start-assessment" onclick="showQuizSetup()">
+                    Start an assessment →
+                </button>
+            </section>
+
+            <section class="stats-grid">
+                <article class="stat-card">
+                    <p>Total assessments</p>
+                    <h2 id="total-assessments">0</h2>
+                    <span>Assessments attempted</span>
+                </article>
+
+                <article class="stat-card">
+                    <p>Completed</p>
+                    <h2 id="completed-assessments">0</h2>
+                    <span>Assessments completed</span>
+                </article>
+
+                <article class="stat-card">
+                    <p>Average score</p>
+                    <h2 id="average-score">—</h2>
+                    <span>Across completed assessments</span>
+                </article>
+            </section>
+
+            <section class="history-section">
+                <div class="section-heading-row">
+                    <div class="section-heading">
+                        <h2>Recent assessments</h2>
+                        <p>Track your learning progress over time.</p>
+                    </div>
+                    <button type="button" class="text-link-btn" onclick="navigateToView('assessments')">
+                        View all in My Assessments →
+                    </button>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Assessment</th>
+                                <th>Difficulty</th>
+                                <th>Date</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="dashboard-recent-history">
+                            <tr>
+                                <td colspan="6" class="empty-state">
+                                    Loading your recent assessments...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- VIEW 2: MY ASSESSMENTS -->
+        <div id="view-assessments" class="app-view" hidden>
+            <div class="view-header">
+                <div>
+                    <p class="eyebrow">PRACTICE ARCHIVE</p>
+                    <h2>My Assessments</h2>
+                    <p>Search, filter, and review all your practice sessions and answer explanations.</p>
+                </div>
+                <button type="button" class="primary-button" onclick="showQuizSetup()">
+                    + New Assessment
+                </button>
             </div>
 
-            <button id="start-assessment"  onclick="showQuizSetup()">
-                Start an assessment →
-            </button>
-        </section>
+            <section class="history-section">
+                <div class="assessments-toolbar">
+                    <div class="search-box">
+                        <input
+                            type="text"
+                            id="assessment-search"
+                            placeholder="Search by topic..."
+                            aria-label="Search by topic"
+                        >
+                    </div>
+                    <div class="filters-row">
+                        <select id="assessment-filter-difficulty" aria-label="Filter difficulty">
+                            <option value="">All Difficulties</option>
+                            <option value="Easy">Easy</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Hard">Hard</option>
+                        </select>
+                        <select id="assessment-filter-status" aria-label="Filter status">
+                            <option value="">All Statuses</option>
+                            <option value="completed">Completed</option>
+                            <option value="in_progress">In Progress</option>
+                        </select>
+                    </div>
+                </div>
 
-        <section class="stats-grid">
-            <article class="stat-card">
-                <p>Total assessments</p>
-                <h2 id="total-assessments">0</h2>
-                <span>Assessments attempted</span>
-            </article>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Assessment</th>
+                                <th>Difficulty</th>
+                                <th>Date</th>
+                                <th>Score</th>
+                                <th>Accuracy</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
 
-            <article class="stat-card">
-                <p>Completed</p>
-                <h2 id="completed-assessments">0</h2>
-                <span>Assessments completed</span>
-            </article>
+                        <tbody id="my-assessments-history">
+                            <tr>
+                                <td colspan="7" class="empty-state">
+                                    Loading your assessments...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
 
-            <article class="stat-card">
-                <p>Average score</p>
-                <h2 id="average-score">—</h2>
-                <span>Across completed assessments</span>
-            </article>
-        </section>
-
-        <section id="assessments" class="history-section">
-            <div class="section-heading">
+        <!-- VIEW 3: PROFILE -->
+        <div id="view-profile" class="app-view" hidden>
+            <div class="view-header">
                 <div>
-                    <h2>Recent assessments</h2>
-                    <p>Track your learning progress over time.</p>
+                    <p class="eyebrow">ACCOUNT & METRICS</p>
+                    <h2>Profile & Analytics</h2>
+                    <p>Manage your account connection and review your learning analytics.</p>
                 </div>
             </div>
 
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Assessment</th>
-                            <th>Date</th>
-                            <th>Score</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
+            <div class="profile-card">
+                <div class="profile-hero">
+                    <div id="profile-hero-avatar" class="profile-avatar-lg">U</div>
+                    <div class="profile-hero-info">
+                        <h3 id="profile-hero-name">Guest User</h3>
+                        <p id="profile-hero-email">Not signed in</p>
+                        <div class="profile-badges-row">
+                            <span id="profile-verified-badge" class="badge-status badge-in-progress">Guest Mode</span>
+                            <span id="profile-hero-joined" class="badge-meta">Joined: —</span>
+                        </div>
+                    </div>
+                </div>
 
-                    <tbody id="assessment-history">
-                        <tr>
-                            <td colspan="4" class="empty-state">
-                                No assessments yet. Start your first
-                                assessment to see your progress here.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="profile-analytics-section">
+                    <h4>Learning Analytics</h4>
+                    <div class="analytics-grid">
+                        <div class="analytics-card">
+                            <span class="analytics-label">Total Attempted</span>
+                            <span id="profile-stat-total" class="analytics-val">0</span>
+                            <span class="analytics-sub">Quizzes started</span>
+                        </div>
+                        <div class="analytics-card">
+                            <span class="analytics-label">Completion Rate</span>
+                            <span id="profile-stat-completed" class="analytics-val">0%</span>
+                            <span class="analytics-sub">Successfully finished</span>
+                        </div>
+                        <div class="analytics-card">
+                            <span class="analytics-label">Average Score</span>
+                            <span id="profile-stat-score" class="analytics-val">—</span>
+                            <span class="analytics-sub">Across completed tests</span>
+                        </div>
+                        <div class="analytics-card">
+                            <span class="analytics-label">Top Practiced Topic</span>
+                            <span id="profile-stat-topic" class="analytics-val analytics-val-text">—</span>
+                            <span class="analytics-sub">Most practiced skill</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="profile-actions-section">
+                    <h4>Account Actions</h4>
+                    <div id="profile-actions-container">
+                        <button type="button" id="profile-google-login-btn" class="primary-button">
+                            Sign in with Google
+                        </button>
+                        <button type="button" id="profile-logout-btn" class="secondary-button" hidden>
+                            Sign out of Google
+                        </button>
+                    </div>
+                </div>
             </div>
-        </section>
+        </div>
 
-        <footer id="profile" class="page-footer">
-            Askloom · Learn, practice, improve.
-        </footer>
+        <!-- QUIZ SETUP SECTION -->
         <section id="quiz-setup" class="history-section" hidden>
-            <div class="section-heading">
-                <h2>Create an assessment</h2>
-                <p>Choose what you want to practice today.</p>
+            <div class="section-heading-row">
+                <div class="section-heading">
+                    <h2>Create an assessment</h2>
+                    <p>Choose what you want to practice today.</p>
+                </div>
+                <button type="button" class="secondary-button" onclick="cancelQuizSetup()">
+                    ✕ Cancel
+                </button>
             </div>
 
             <form id="quiz-form">
                 <label for="topic">Topic</label>
-                <input
-                    type="text"
-                    id="topic"
-                    name="topic"
-                    placeholder="e.g. Python, SQL, Machine Learning"
-                    maxlength="100"
-                >
+                <select id="topic" name="topic" required>
+                    <option value="" disabled selected>Select a subject...</option>
+                    <option value="Python Programming">Python Programming</option>
+                    <option value="Data Science & Machine Learning">Data Science & Machine Learning</option>
+                    <option value="Generative AI & LLMs">Generative AI & LLMs</option>
+                    <option value="SQL & Databases">SQL & Databases</option>
+                    <option value="Statistics & Probability">Statistics & Probability</option>
+                    <option value="Others">Others</option>
+                </select>
+
+                <div id="custom-topic-container" hidden>
+                    <label for="custom-topic">Enter your topic of interest</label>
+                    <input
+                        type="text"
+                        id="custom-topic"
+                        name="custom-topic"
+                        placeholder="e.g. Docker, Rust, System Design, Cloud Computing..."
+                        maxlength="100"
+                    >
+                </div>
 
                 <label for="difficulty">Difficulty</label>
                 <select id="difficulty" name="difficulty">
@@ -131,6 +323,7 @@
             </form>
         </section>
         
+        <!-- QUIZ SCREEN -->
         <section id="quiz-screen" class="history-section" hidden>
             <div class="section-heading">
                 <p class="eyebrow">YOUR ASSESSMENT</p>
@@ -158,11 +351,12 @@
             </div>
         </section>
         
+        <!-- RESULTS & REVIEW SCREEN -->
         <section id="results-screen" class="history-section" hidden>
             <div class="section-heading">
                 <p class="eyebrow">ASSESSMENT COMPLETED</p>
-                <h2>Your results</h2>
-                <p>Here's how you performed in this assessment.</p>
+                <h2 id="results-title">Your results</h2>
+                <p id="results-subtitle">Here's how you performed in this assessment.</p>
             </div>
 
             <div class="results-summary">
@@ -179,11 +373,22 @@
 
             <p id="result-summary" class="result-message"></p>
 
-            <button type="button" id="try-again" class="primary-button">
-                Try another assessment →
-            </button>
+            <div class="results-actions">
+                <button type="button" id="try-again" class="primary-button">
+                    Try another assessment →
+                </button>
+                <button type="button" id="back-to-dashboard-btn" class="secondary-button" onclick="navigateToView('dashboard')">
+                    Back to Dashboard
+                </button>
+                <button type="button" id="back-to-assessments-btn" class="secondary-button" onclick="navigateToView('assessments')">
+                    Back to My Assessments
+                </button>
+            </div>
         </section>
 
+        <footer class="page-footer">
+            Askloom · Learn, practice, improve.
+        </footer>
     </main>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
