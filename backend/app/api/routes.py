@@ -140,40 +140,20 @@ def generate_quiz(
     ) from exc
 
 
-
-
 @router.post("/submit")
 def submit_quiz(
     submission: QuizAnswerSubmission,
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Score a quiz, save the submission, and return detailed results."""
-
-    user_id = get_authenticated_user_id(request)
-    user = db.get(User, user_id)
-
-    if user is None:
-        request.session.clear()
-        raise HTTPException(
-            status_code=401,
-            detail="User account not found. Please sign in again.",
-        )
-
+    """Score a quiz using stored answer keys and save the result."""
     assessment = db.get(Assessment, submission.quiz_id)
 
     if assessment is None:
         raise HTTPException(status_code=404, detail="Quiz not found.")
-    
-    print(
-    f"OWNERSHIP CHECK: assessment_id={assessment.assessment_id}, "
-    f"owner_id={assessment.user_id}, current_user_id={user.user_id}"
-)
-    if assessment.user_id != user.user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Quiz does not belong to this user.",
-        )
+
+    if assessment.user_id != DEV_USER_ID:
+        raise HTTPException(status_code=403, detail="Quiz does not belong to this user.")
 
     # 3. Prevent duplicate submissions.
     if assessment.status != "in_progress":

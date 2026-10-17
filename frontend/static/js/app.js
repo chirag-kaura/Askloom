@@ -2,26 +2,6 @@
 const quizSetup = document.getElementById("quiz-setup");
 const quizForm = document.getElementById("quiz-form");
 const quizScreen = document.getElementById("quiz-screen");
-const resultsScreen = document.getElementById("results-screen");
-
-const topicSelect = document.getElementById("topic");
-const customTopicContainer = document.getElementById(
-    "custom-topic-container"
-);
-const customTopicInput = document.getElementById("custom-topic");
-
-topicSelect.addEventListener("change", function () {
-    const isOther = topicSelect.value === "Other";
-
-    customTopicContainer.hidden = !isOther;
-    customTopicInput.required = isOther;
-
-    if (!isOther) {
-        customTopicInput.value = "";
-    }
-});
-
-
 
 let questions = [];
 let currentQuestionIndex = 0;
