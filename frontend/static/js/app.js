@@ -48,7 +48,7 @@ quizForm.addEventListener("submit", async function (event) {
     submitButton.textContent = "Generating questions...";
 
     try {
-        const response = await fetch("http://127.0.0.1:8000/quiz/generate", {
+        const response = await fetch(`${window.ASKLOOM_API_BASE_URL}/quiz/generate`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -171,7 +171,7 @@ document.getElementById("next-question").addEventListener("click", async () => {
     nextButton.textContent = "Submitting...";
 
     try {
-        const response = await fetch("http://127.0.0.1:8000/quiz/submit", {
+        const response = await fetch(`${window.ASKLOOM_API_BASE_URL}/quiz/submit`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
