@@ -7,9 +7,9 @@ const quizForm = document.getElementById("quiz-form");
 const quizScreen = document.getElementById("quiz-screen");
 const resultsScreen = document.getElementById("results-screen");
 
-const AUTH_API = window.location.hostname === "localhost"
-    ? "http://localhost:8000"
-    : "http://127.0.0.1:8000";
+const AUTH_API = (
+    window.ASKLOOM_API_BASE_URL || "http://127.0.0.1:8000"
+).replace(/\/$/, "");
 
 let questions = [];
 let currentQuestionIndex = 0;
@@ -736,7 +736,7 @@ quizForm.addEventListener("submit", async function (event) {
     submitButton.textContent = "Generating questions...";
 
     try {
-        const response = await fetch(`${AUTH_API}/quiz/generate`, {
+const response = await fetch(`${AUTH_API}/quiz/generate`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -947,7 +947,7 @@ document.getElementById("next-question").addEventListener("click", async () => {
     nextButton.textContent = "Submitting...";
 
     try {
-        const response = await fetch(`${AUTH_API}/quiz/submit`, {
+const response = await fetch(`${AUTH_API}/quiz/submit`, {
             method: "POST",
             credentials: "include",
             headers: {
