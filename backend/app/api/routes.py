@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.db.database import get_db
@@ -11,6 +11,7 @@ from backend.app.models import (
     Assessment,
     AssessmentAnswer,
     QuestionRecord,
+    QuestionVersionHistory,
     User,
 )
 from backend.app.schemas.question import (
@@ -59,6 +60,11 @@ class QuizAnswerSubmission(BaseModel):
     )
 
 
+class QuizAlternateRequest(BaseModel):
+    quiz_id: int
+    slot_number: int = Field(ge=1, le=5)
+
+
 def _save_generated_quiz(db: Session, user_id: int, difficulty: str, sanitized_topic: str, generated_questions: list):
     """Save newly generated assessment and questions to DB in worker threadpool."""
     user = db.get(User, user_id)
@@ -99,6 +105,16 @@ def _save_generated_quiz(db: Session, user_id: int, difficulty: str, sanitized_t
                 question_version=1,
                 regeneration_count=0,
                 correct_answer_snapshot=question_record.correct_option,
+            )
+        )
+
+        db.add(
+            QuestionVersionHistory(
+                assessment_id=assessment.assessment_id,
+                slot_number=slot_number,
+                version_number=1,
+                question_id=question_record.question_id,
+                assigned_at=datetime.now(timezone.utc),
             )
         )
 
@@ -523,3 +539,226 @@ def get_quiz_review(
         "completed_at": assessment.completed_at.isoformat() if assessment.completed_at else None,
         "questions": question_reviews,
     }
+
+
+@router.get("/resume/{quiz_id}")
+def resume_quiz(
+    quiz_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Resume an in-progress assessment and return its active questions without spoiling answers."""
+    user_id = get_authenticated_user_id(request)
+
+    assessment = db.get(Assessment, quiz_id)
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Quiz not found.")
+
+    if assessment.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Quiz does not belong to this user.")
+
+    if assessment.status != "in_progress":
+        raise HTTPException(status_code=409, detail="This quiz has already been completed.")
+
+    answer_rows = db.execute(
+        select(AssessmentAnswer, QuestionRecord)
+        .join(QuestionRecord, QuestionRecord.question_id == AssessmentAnswer.question_id)
+        .where(AssessmentAnswer.assessment_id == assessment.assessment_id)
+        .order_by(AssessmentAnswer.slot_number)
+    ).all()
+
+    if not answer_rows:
+        raise HTTPException(status_code=404, detail="No questions found for this quiz.")
+
+    public_questions = []
+    selected_answers = []
+    topic = "General Knowledge"
+
+    for answer_record, question in answer_rows:
+        if question.topic:
+            topic = question.topic
+        options = [question.option_a, question.option_b, question.option_c, question.option_d]
+        public_questions.append({
+            "question": question.question_text,
+            "options": options,
+        })
+        selected_answers.append(answer_record.selected_answer)
+
+    # Count total alternate questions used across this assessment
+    alternates_used = db.execute(
+        select(func.count(QuestionVersionHistory.history_id))
+        .where(
+            QuestionVersionHistory.assessment_id == assessment.assessment_id,
+            QuestionVersionHistory.version_number > 1,
+        )
+    ).scalar() or 0
+
+    alternates_remaining = max(0, 3 - alternates_used)
+
+    return {
+        "quiz_id": assessment.assessment_id,
+        "topic": topic,
+        "difficulty": assessment.difficulty,
+        "questions": public_questions,
+        "selected_answers": selected_answers,
+        "total_questions": len(public_questions),
+        "alternates_remaining": alternates_remaining,
+    }
+
+
+@router.post("/alternate")
+async def generate_alternate_question(
+    alternate_req: QuizAlternateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Generate an alternate question for an active question slot (up to 3 per assessment)."""
+    user_id = get_authenticated_user_id(request)
+
+    assessment = db.get(Assessment, alternate_req.quiz_id)
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Quiz not found.")
+
+    if assessment.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Quiz does not belong to this user.")
+
+    if assessment.status != "in_progress":
+        raise HTTPException(status_code=409, detail="This quiz has already been completed.")
+
+    # 1. Check assessment-level alternate quota (max 3 total across quiz)
+    total_alternates_used = db.execute(
+        select(func.count(QuestionVersionHistory.history_id))
+        .where(
+            QuestionVersionHistory.assessment_id == assessment.assessment_id,
+            QuestionVersionHistory.version_number > 1,
+        )
+    ).scalar() or 0
+
+    if total_alternates_used >= 3:
+        raise HTTPException(
+            status_code=400,
+            detail="You have used all 3 alternate questions for this assessment.",
+        )
+
+    # 2. Check slot-level answer record
+    answer_record = db.execute(
+        select(AssessmentAnswer)
+        .where(
+            AssessmentAnswer.assessment_id == assessment.assessment_id,
+            AssessmentAnswer.slot_number == alternate_req.slot_number,
+        )
+    ).scalar_one_or_none()
+
+    if answer_record is None:
+        raise HTTPException(status_code=404, detail="Question slot not found.")
+
+    if answer_record.question_version >= 3:
+        raise HTTPException(
+            status_code=400,
+            detail="This question slot has reached its maximum version limit (3).",
+        )
+
+    # 3. Retrieve original topic and difficulty from current question
+    current_question = db.get(QuestionRecord, answer_record.question_id)
+    topic = current_question.topic if current_question and current_question.topic else "General Knowledge"
+    difficulty = assessment.difficulty or (current_question.difficulty if current_question else "Medium")
+
+    # 4. Generate new question via LLM (or curated pool)
+    try:
+        gen_result = generate_questions(topic=topic, difficulty=difficulty)
+        if inspect.isawaitable(gen_result):
+            new_questions = await gen_result
+        else:
+            new_questions = gen_result
+
+        # Pick one question that differs from the current question text
+        new_q_obj = None
+        for q in new_questions:
+            if current_question and q.question.strip() == current_question.question_text.strip():
+                continue
+            new_q_obj = q
+            break
+        if not new_q_obj:
+            new_q_obj = new_questions[0]
+
+        # 5. Save new question record in DB
+        new_question_record = QuestionRecord(
+            question_text=new_q_obj.question,
+            option_a=new_q_obj.options[0],
+            option_b=new_q_obj.options[1],
+            option_c=new_q_obj.options[2],
+            option_d=new_q_obj.options[3],
+            correct_option=chr(65 + new_q_obj.options.index(new_q_obj.correct_answer)),
+            explanation=new_q_obj.explanation,
+            topic=topic,
+            difficulty=difficulty,
+        )
+        db.add(new_question_record)
+        db.flush()
+
+        # 6. Mark previous active version row as discarded
+        prev_history = db.execute(
+            select(QuestionVersionHistory)
+            .where(
+                QuestionVersionHistory.assessment_id == assessment.assessment_id,
+                QuestionVersionHistory.slot_number == alternate_req.slot_number,
+                QuestionVersionHistory.discarded_at.is_(None),
+            )
+        ).scalar_one_or_none()
+
+        now = datetime.now(timezone.utc)
+        if prev_history:
+            prev_history.discarded_at = now
+
+        new_version = answer_record.question_version + 1
+
+        # 7. Add new QuestionVersionHistory record
+        new_history = QuestionVersionHistory(
+            assessment_id=assessment.assessment_id,
+            slot_number=alternate_req.slot_number,
+            version_number=new_version,
+            question_id=new_question_record.question_id,
+            assigned_at=now,
+        )
+        db.add(new_history)
+
+        # 8. Update AssessmentAnswer for this slot
+        answer_record.question_id = new_question_record.question_id
+        answer_record.question_version = new_version
+        answer_record.regeneration_count = (answer_record.regeneration_count or 0) + 1
+        answer_record.correct_answer_snapshot = new_question_record.correct_option
+        answer_record.selected_answer = None
+        answer_record.is_correct = None
+        answer_record.assigned_at = now
+        answer_record.answered_at = None
+
+        db.commit()
+
+        alternates_remaining = max(0, 3 - (total_alternates_used + 1))
+
+        return {
+            "quiz_id": assessment.assessment_id,
+            "slot_number": alternate_req.slot_number,
+            "version_number": new_version,
+            "alternates_remaining": alternates_remaining,
+            "question": {
+                "question": new_question_record.question_text,
+                "options": [
+                    new_question_record.option_a,
+                    new_question_record.option_b,
+                    new_question_record.option_c,
+                    new_question_record.option_d,
+                ],
+            },
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Alternate question generation failed")
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to generate alternate question. Please try again.",
+        ) from exc

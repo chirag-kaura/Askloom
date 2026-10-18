@@ -9,21 +9,29 @@
         rel="stylesheet"
         href="{{ url_for('static', filename='css/style.css') }}"
     >
+    <link
+        rel="icon"
+        type="image/png"
+        href="{{ url_for('static', filename='images/logo.png') }}"
+    >
 </head>
 <body>
     <aside class="sidebar">
-        <h2 class="brand">Askloom<span>.</span></h2>
+        <a href="/dashboard" class="brand-link" data-view="dashboard">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Askloom logo" class="brand-logo-img">
+            <span class="brand">Askloom<span>.</span></span>
+        </a>
 
         <nav>
-            <a href="/" class="nav-link active" data-view="dashboard">
+            <a href="/dashboard" class="nav-link active" data-view="dashboard">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
                 Dashboard
             </a>
-            <a href="#assessments" class="nav-link" data-view="assessments">
+            <a href="/assessments" class="nav-link" data-view="assessments">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
                 My Assessments
             </a>
-            <a href="#profile" class="nav-link" data-view="profile">
+            <a href="/profile" class="nav-link" data-view="profile">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
                 Profile
             </a>
@@ -36,9 +44,15 @@
 
     <main class="main-content">
         <header class="topbar">
-            <div>
-                <p id="topbar-eyebrow" class="eyebrow">YOUR LEARNING SPACE</p>
-                <h1 id="topbar-title">Dashboard</h1>
+            <div class="topbar-left">
+                <a href="/dashboard" class="mobile-brand" data-view="dashboard">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Askloom logo" class="brand-logo-img">
+                    <span class="brand">Askloom<span>.</span></span>
+                </a>
+                <div class="topbar-titles">
+                    <p id="topbar-eyebrow" class="eyebrow">YOUR LEARNING SPACE</p>
+                    <h1 id="topbar-title">Dashboard</h1>
+                </div>
             </div>
 
             <div class="profile-container">
@@ -49,7 +63,7 @@
                     aria-label="Open user profile"
                     aria-expanded="false"
                 >
-                    U
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Profile" class="avatar-logo-img">
                 </button>
 
                 <div id="profile-dropdown" class="profile-dropdown" hidden>
@@ -152,9 +166,7 @@
         <div id="view-assessments" class="app-view" hidden>
             <div class="view-header">
                 <div>
-                    <p class="eyebrow">PRACTICE ARCHIVE</p>
-                    <h2>My Assessments</h2>
-                    <p>Search, filter, and review all your practice sessions and answer explanations.</p>
+                    <p class="view-subtitle">Search, filter, and review all your practice sessions and answer explanations.</p>
                 </div>
                 <button type="button" class="primary-button" onclick="showQuizSetup()">
                     + New Assessment
@@ -216,15 +228,15 @@
         <div id="view-profile" class="app-view" hidden>
             <div class="view-header">
                 <div>
-                    <p class="eyebrow">ACCOUNT & METRICS</p>
-                    <h2>Profile & Analytics</h2>
-                    <p>Manage your account connection and review your learning analytics.</p>
+                    <p class="view-subtitle">Manage your account connection and review your learning analytics.</p>
                 </div>
             </div>
 
             <div class="profile-card">
                 <div class="profile-hero">
-                    <div id="profile-hero-avatar" class="profile-avatar-lg">U</div>
+                    <div id="profile-hero-avatar" class="profile-avatar-lg">
+                        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Profile avatar" class="avatar-hero-img">
+                    </div>
                     <div class="profile-hero-info">
                         <h3 id="profile-hero-name">Guest User</h3>
                         <p id="profile-hero-email">Not signed in</p>
@@ -340,6 +352,19 @@
                 <div id="answer-options"></div>
             </div>
 
+            <div class="quiz-controls-bar">
+                <button type="button" id="quiz-hint-btn" class="hint-button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21h6"/></svg>
+                    <span>Need a hint? Ask Loomie ✦</span>
+                </button>
+
+                <button type="button" id="alternate-question-btn" class="alternate-button" title="Generate an alternate question for this slot (up to 3 per assessment)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                    <span>Alternate Question</span>
+                    <span id="alternate-counter-badge" class="counter-badge">3 left</span>
+                </button>
+            </div>
+
             <div class="quiz-navigation">
                 <button type="button" id="previous-question" class="secondary-button">
                     ← Previous
@@ -390,6 +415,92 @@
             Askloom · Learn, practice, improve.
         </footer>
     </main>
+
+    <!-- FLOATING ACTION BUTTON (ASK LOOMIE) -->
+    <button id="askloomie-fab" class="loomie-fab" aria-label="Open AI Tutor Loomie" type="button">
+        <span class="fab-sparkle">✦</span>
+        <span class="fab-text">Ask Loomie</span>
+        <span class="fab-pulse"></span>
+    </button>
+
+    <!-- SLIDE-OVER CHAT DRAWER -->
+    <div id="chat-overlay" class="chat-overlay" hidden></div>
+    <aside id="chat-drawer" class="chat-drawer" hidden aria-label="AI Tutor Chat">
+        <div class="chat-header">
+            <div class="chat-header-info">
+                <div class="chat-avatar">✦</div>
+                <div>
+                    <div class="chat-title-row">
+                        <h3>Loomie</h3>
+                        <span id="chat-mode-pill" class="mode-pill">Study Coach</span>
+                    </div>
+                    <p class="chat-subtitle">AI Learning Assistant</p>
+                </div>
+            </div>
+            <div class="chat-header-actions">
+                <button type="button" id="chat-clear-btn" class="chat-icon-btn" title="Clear conversation" aria-label="Clear chat">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                </button>
+                <button type="button" id="chat-close-btn" class="chat-icon-btn" title="Close drawer" aria-label="Close chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- DYNAMIC CONTEXT BANNER -->
+        <div id="chat-context-banner" class="context-banner" hidden>
+            <div class="context-info">
+                <span class="context-icon">📌</span>
+                <span id="context-desc">Active Quiz Context</span>
+            </div>
+            <button type="button" id="chat-detach-context" class="context-detach" title="Detach context" aria-label="Detach context">✕</button>
+        </div>
+
+        <!-- MESSAGES CONTAINER -->
+        <div id="chat-messages" class="chat-messages">
+            <!-- Messages rendered dynamically -->
+        </div>
+
+        <!-- SUGGESTION CHIPS -->
+        <div id="chat-suggestion-chips" class="suggestion-chips">
+            <!-- Chips rendered dynamically based on active screen/context -->
+        </div>
+
+        <!-- INPUT FOOTER -->
+        <form id="chat-form" class="chat-footer">
+            <div class="input-wrapper">
+                <textarea
+                    id="chat-input"
+                    rows="1"
+                    placeholder="Ask Loomie anything about your learning..."
+                    maxlength="1000"
+                ></textarea>
+                <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send message">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
+            <div class="chat-footer-meta">
+                <span>Shift+Enter for new line</span>
+                <span id="chat-char-counter">0 / 1000</span>
+            </div>
+        </form>
+    </aside>
+
+    <!-- MOBILE BOTTOM NAVIGATION -->
+    <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
+        <a href="/dashboard" class="mobile-nav-link active" data-view="dashboard">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            <span>Dashboard</span>
+        </a>
+        <a href="/assessments" class="mobile-nav-link" data-view="assessments">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+            <span>Assessments</span>
+        </a>
+        <a href="/profile" class="mobile-nav-link" data-view="profile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+            <span>Profile</span>
+        </a>
+    </nav>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

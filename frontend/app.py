@@ -9,8 +9,11 @@ BACKEND_URL = "http://127.0.0.1:8000"
 
 
 @app.route("/")
+@app.route("/dashboard")
+@app.route("/assessments")
+@app.route("/profile")
 def home():
-    """Render the Askloom homepage."""
+    """Render the Askloom application for all tabs."""
     return render_template("index.html")
 
 

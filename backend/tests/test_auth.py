@@ -63,6 +63,7 @@ def test_google_login_redirects_to_google():
     assert "https://accounts.google.com/o/oauth2/v2/auth" in location
     assert config.GOOGLE_CLIENT_ID in location
     assert "scope=openid+email+profile" in location
+    assert "prompt=select_account" in location
 
 
 def test_unauthenticated_quiz_generate_returns_401():

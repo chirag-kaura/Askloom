@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
+from backend.app.api.chat import router as chat_router
 from backend.app.api.routes import router as quiz_router
 from backend.app.core import config
 from backend.app.db.database import get_db
@@ -50,13 +51,18 @@ app.add_middleware(
 )
 
 app.include_router(quiz_router)
+app.include_router(chat_router)
 
 
 @app.get("/auth/google/login", tags=["Authentication"])
 async def google_login(request: Request):
     """Redirect the user to Google for authentication."""
     redirect_uri = request.url_for("google_callback")
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+    return await oauth.google.authorize_redirect(
+        request,
+        redirect_uri,
+        prompt="select_account",
+    )
 
 
 @app.get(
@@ -85,13 +91,15 @@ async def google_callback(
             detail="Unable to retrieve Google user information.",
         )
 
-    email = google_user.get("email")
+    raw_email = google_user.get("email")
 
-    if not email or not google_user.get("email_verified"):
+    if not raw_email or not google_user.get("email_verified"):
         raise HTTPException(
             status_code=400,
             detail="A verified Google email address is required.",
         )
+
+    email = raw_email.strip().lower()
 
     # Find the existing database account by its unique email.
     db_user = db.scalar(
@@ -119,6 +127,9 @@ async def google_callback(
                     detail="Could not create or retrieve the user account.",
                 )
 
+    # Clean existing session before setting the new user to prevent cross-account bleeding
+    request.session.clear()
+
     # Store the database ID alongside the Google profile in the session.
     request.session["user"] = {
         "user_id": db_user.user_id,
@@ -130,7 +141,7 @@ async def google_callback(
 
     # Return to the frontend dashboard.
     return RedirectResponse(
-        url="http://127.0.0.1:5000/",
+        url="http://127.0.0.1:5000/dashboard",
         status_code=302,
     )
 

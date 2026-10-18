@@ -17,6 +17,8 @@ let selectedAnswers = [];
 let currentQuizId = null;
 let currentUser = null;
 let cachedAssessments = [];
+let currentAlternatesRemaining = 3;
+let slotVersions = [1, 1, 1, 1, 1];
 
 // ==========================================
 // Utility Helpers
@@ -80,7 +82,25 @@ function getOrCreateReviewContainer() {
 // Single Page Application (SPA) Router
 // ==========================================
 
-function navigateToView(viewName, updateHash = true) {
+function getPathView() {
+    // Check if legacy hash was provided (e.g. #assessments, #profile)
+    if (window.location.hash) {
+        const rawHash = window.location.hash.replace("#", "").toLowerCase().trim();
+        if (["dashboard", "assessments", "profile"].includes(rawHash)) {
+            return rawHash;
+        }
+    }
+
+    // Check URL pathname (e.g. /dashboard, /assessments, /profile)
+    const path = window.location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase().trim();
+    if (["dashboard", "assessments", "profile"].includes(path)) {
+        return path;
+    }
+
+    return "dashboard";
+}
+
+function navigateToView(viewName, updateUrl = true) {
     const target = (viewName || "dashboard").toLowerCase();
     const validViews = ["dashboard", "assessments", "profile"];
     const activeView = validViews.includes(target) ? target : "dashboard";
@@ -119,8 +139,8 @@ function navigateToView(viewName, updateHash = true) {
         loadProfileView();
     }
 
-    // 4. Update sidebar navigation link active state
-    document.querySelectorAll(".sidebar nav .nav-link").forEach(link => {
+    // 4. Update navigation links active state (sidebar & mobile nav)
+    document.querySelectorAll(".sidebar nav .nav-link, .mobile-bottom-nav .mobile-nav-link").forEach(link => {
         if (link.getAttribute("data-view") === activeView) {
             link.classList.add("active");
         } else {
@@ -128,40 +148,47 @@ function navigateToView(viewName, updateHash = true) {
         }
     });
 
-    // 5. Synchronize URL hash
-    if (updateHash) {
-        const expectedHash = activeView === "dashboard" ? "" : `#${activeView}`;
-        if (activeView === "dashboard") {
-            if (window.location.hash) {
-                history.pushState(null, "", window.location.pathname);
-            }
-        } else if (window.location.hash !== expectedHash) {
-            window.location.hash = activeView;
+    // 5. Synchronize clean URL path (e.g. /dashboard, /assessments, /profile)
+    const expectedPath = `/${activeView}`;
+    if (updateUrl) {
+        if (window.location.pathname !== expectedPath || window.location.hash) {
+            history.pushState({ view: activeView }, "", expectedPath);
+        }
+    } else {
+        if (window.location.pathname !== expectedPath || window.location.hash) {
+            history.replaceState({ view: activeView }, "", expectedPath);
         }
     }
 }
 
 function initRouter() {
-    // Intercept sidebar navigation clicks
-    document.querySelectorAll(".sidebar nav .nav-link").forEach(link => {
+    // Intercept navigation links with data-view (sidebar links, mobile bottom nav, brand logos)
+    document.querySelectorAll("[data-view]").forEach(link => {
         link.addEventListener("click", (e) => {
             const view = link.getAttribute("data-view");
-            if (view) {
+            if (view && ["dashboard", "assessments", "profile"].includes(view)) {
                 e.preventDefault();
                 navigateToView(view, true);
+                window.scrollTo({ top: 0, behavior: "smooth" });
             }
         });
     });
 
-    // Listen for hash changes (browser back/forward or manual hash navigation)
+    // Listen for browser Back/Forward navigation
+    window.addEventListener("popstate", (e) => {
+        const targetView = (e.state && e.state.view) ? e.state.view : getPathView();
+        navigateToView(targetView, false);
+    });
+
+    // Listen for hash changes if any legacy external links occur
     window.addEventListener("hashchange", () => {
-        const hash = window.location.hash.replace("#", "").toLowerCase();
-        navigateToView(hash || "dashboard", false);
+        const targetView = getPathView();
+        navigateToView(targetView, false);
     });
 
     // Handle initial route on page load
-    const initialHash = window.location.hash.replace("#", "").toLowerCase();
-    navigateToView(initialHash || "dashboard", false);
+    const initialView = getPathView();
+    navigateToView(initialView, false);
 }
 
 // ==========================================
@@ -292,7 +319,7 @@ function renderRecentAssessmentsTable(assessments) {
                 <td>
                     ${isCompleted
                         ? `<button type="button" class="review-btn" onclick="openPastQuizReview('${item.assessment_id}')">Review</button>`
-                        : `<span style="color: var(--text-secondary); font-size: 12px;">In progress</span>`
+                        : `<button type="button" class="resume-btn" onclick="resumeAssessment('${item.assessment_id}')">Resume →</button>`
                     }
                 </td>
             </tr>
@@ -418,7 +445,7 @@ function renderAssessmentsTable(assessments) {
                 <td>
                     ${isCompleted
                         ? `<button type="button" class="review-btn" onclick="openPastQuizReview('${item.assessment_id}')">Review</button>`
-                        : `<span style="color: var(--text-secondary); font-size: 12px;">In progress</span>`
+                        : `<button type="button" class="resume-btn" onclick="resumeAssessment('${item.assessment_id}')">Resume →</button>`
                     }
                 </td>
             </tr>
@@ -471,9 +498,9 @@ async function loadProfileView() {
             if (emailEl) emailEl.textContent = user.email || "";
 
             if (user.picture && avatarEl) {
-                avatarEl.innerHTML = `<img src="${escapeHtml(user.picture)}" alt="Profile picture">`;
+                avatarEl.innerHTML = `<img src="${escapeHtml(user.picture)}" alt="Profile picture" class="avatar-hero-img">`;
             } else if (avatarEl) {
-                avatarEl.textContent = (user.name || "U").trim().charAt(0).toUpperCase();
+                avatarEl.innerHTML = `<img src="/static/images/logo.png" alt="Profile avatar" class="avatar-hero-img">`;
             }
 
             if (verifiedBadge) {
@@ -491,7 +518,9 @@ async function loadProfileView() {
             currentUser = null;
             if (nameEl) nameEl.textContent = "Guest User";
             if (emailEl) emailEl.textContent = "Not signed in";
-            if (avatarEl) avatarEl.textContent = "U";
+            if (avatarEl) {
+                avatarEl.innerHTML = `<img src="/static/images/logo.png" alt="Profile avatar" class="avatar-hero-img">`;
+            }
             if (verifiedBadge) {
                 verifiedBadge.textContent = "Guest Mode";
                 verifiedBadge.className = "badge-status badge-in-progress";
@@ -554,6 +583,7 @@ if (profileLogoutBtn) {
             showLoggedOutProfile();
             await loadProfileView();
             await loadDashboardData();
+            await loadAssessmentsView();
         } catch (error) {
             console.error("Profile sign out failed:", error);
             alert(error.message || "Could not sign out.");
@@ -562,6 +592,56 @@ if (profileLogoutBtn) {
             profileLogoutBtn.textContent = "Sign out of Google";
         }
     });
+}
+
+// ==========================================
+// Resume In-Progress Assessment
+// ==========================================
+
+async function resumeAssessment(quizId) {
+    try {
+        const response = await fetch(`${AUTH_API}/quiz/resume/${quizId}`, {
+            credentials: "include"
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.detail || "Could not resume assessment.");
+        }
+
+        const data = await response.json();
+        questions = data.questions || [];
+        if (!questions.length) {
+            throw new Error("No questions found for this assessment.");
+        }
+
+        currentQuizId = data.quiz_id;
+        selectedAnswers = data.selected_answers || Array(questions.length).fill(null);
+        currentAlternatesRemaining = data.alternates_remaining ?? 3;
+        slotVersions = [1, 1, 1, 1, 1];
+
+        // Find the first unanswered question to resume from, or start at question 1
+        const firstUnanswered = selectedAnswers.findIndex(a => a === null);
+        currentQuestionIndex = firstUnanswered !== -1 ? firstUnanswered : 0;
+
+        document.getElementById("quiz-topic").textContent = data.topic || "Assessment";
+
+        // Hide all app views and reveal quiz screen
+        document.querySelectorAll(".app-view").forEach(v => v.hidden = true);
+        if (quizSetup) quizSetup.hidden = true;
+        if (resultsScreen) resultsScreen.hidden = true;
+        if (quizScreen) quizScreen.hidden = false;
+
+        renderQuestion();
+
+        quizScreen.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    } catch (err) {
+        console.error("Error resuming quiz:", err);
+        alert(err.message || "Failed to resume quiz.");
+    }
 }
 
 // ==========================================
@@ -686,6 +766,8 @@ quizForm.addEventListener("submit", async function (event) {
         currentQuestionIndex = 0;
         selectedAnswers = Array(questions.length).fill(null);
         currentQuizId = quizData.quiz_id;
+        currentAlternatesRemaining = 3;
+        slotVersions = [1, 1, 1, 1, 1];
 
         document.getElementById("quiz-topic").textContent = topic;
 
@@ -709,6 +791,82 @@ quizForm.addEventListener("submit", async function (event) {
         submitButton.textContent = "Generate questions →";
     }
 });
+
+function updateAlternateButtonUI() {
+    const altBtn = document.getElementById("alternate-question-btn");
+    const counterBadge = document.getElementById("alternate-counter-badge");
+    if (!altBtn || !counterBadge) return;
+
+    counterBadge.textContent = `${currentAlternatesRemaining} left`;
+
+    const slotVersion = slotVersions[currentQuestionIndex] || 1;
+    if (currentAlternatesRemaining <= 0) {
+        altBtn.disabled = true;
+        altBtn.title = "All 3 alternate questions have been used for this assessment.";
+    } else if (slotVersion >= 3) {
+        altBtn.disabled = true;
+        altBtn.title = "This question has reached its maximum version limit (3).";
+    } else {
+        altBtn.disabled = false;
+        altBtn.title = `Generate an alternate question for Question ${currentQuestionIndex + 1} (${currentAlternatesRemaining} left)`;
+    }
+}
+
+async function handleAlternateQuestion() {
+    if (!currentQuizId || currentAlternatesRemaining <= 0) return;
+    const slotVersion = slotVersions[currentQuestionIndex] || 1;
+    if (slotVersion >= 3) return;
+
+    const altBtn = document.getElementById("alternate-question-btn");
+    if (!altBtn) return;
+
+    altBtn.disabled = true;
+    altBtn.innerHTML = `<span>Generating alternate...</span>`;
+
+    try {
+        const response = await fetch(`${AUTH_API}/quiz/alternate`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                quiz_id: currentQuizId,
+                slot_number: currentQuestionIndex + 1
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.detail || "Could not generate alternate question.");
+        }
+
+        // Update active questions array and clear student selection for this slot
+        questions[currentQuestionIndex] = data.question;
+        selectedAnswers[currentQuestionIndex] = null;
+        currentAlternatesRemaining = data.alternates_remaining;
+        slotVersions[currentQuestionIndex] = data.version_number;
+
+        renderQuestion();
+    } catch (err) {
+        console.error("Alternate question error:", err);
+        alert(err.message || "Failed to generate alternate question. Please try again.");
+    } finally {
+        if (altBtn) {
+            altBtn.innerHTML = `
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                <span>Alternate Question</span>
+                <span id="alternate-counter-badge" class="counter-badge">${currentAlternatesRemaining} left</span>
+            `;
+            updateAlternateButtonUI();
+        }
+    }
+}
+
+const alternateBtnElement = document.getElementById("alternate-question-btn");
+if (alternateBtnElement) {
+    alternateBtnElement.addEventListener("click", handleAlternateQuestion);
+}
 
 function renderQuestion() {
     const question = questions[currentQuestionIndex];
@@ -754,6 +912,8 @@ function renderQuestion() {
         currentQuestionIndex === questions.length - 1
             ? "Finish quiz"
             : "Next →";
+
+    updateAlternateButtonUI();
 }
 
 document.getElementById("previous-question").addEventListener("click", () => {
@@ -959,6 +1119,27 @@ function renderResultsReview(questionReviews) {
         explanation.style.whiteSpace = "pre-wrap";
         card.appendChild(explanation);
 
+        const deepDiveBtn = document.createElement("button");
+        deepDiveBtn.type = "button";
+        deepDiveBtn.className = "review-deep-dive-btn";
+        deepDiveBtn.innerHTML = `<span>💬 Deep Dive with Loomie ✦</span>`;
+        deepDiveBtn.addEventListener("click", () => {
+            const context = {
+                question_number: review.question_number,
+                question_text: review.question,
+                selected_answer: review.selected_answer_text || review.selected_answer || "None",
+                correct_answer: review.correct_answer_text || review.correct_answer,
+                explanation: review.explanation,
+                topic: document.getElementById("quiz-topic")?.textContent || "Assessment Review"
+            };
+            openChatDrawer(
+                "deep_dive_review",
+                context,
+                `Can you explain why "${context.correct_answer}" is correct and how this differs from other options?`
+            );
+        });
+        card.appendChild(deepDiveBtn);
+
         container.appendChild(card);
     });
 }
@@ -1005,7 +1186,13 @@ async function loadUserProfile() {
 
         const data = await response.json();
         const user = data.user;
+        const previousEmail = currentUser ? currentUser.email : null;
         currentUser = user;
+
+        // If authenticated user changed, invalidate cached history
+        if (previousEmail && previousEmail !== user.email) {
+            cachedAssessments = [];
+        }
 
         profileName.textContent = user.name || "Google User";
         profileEmail.textContent = user.email || "";
@@ -1016,12 +1203,12 @@ async function loadUserProfile() {
             profileButton.innerHTML = "";
             const avatarImage = document.createElement("img");
             avatarImage.src = user.picture;
-            avatarImage.alt = "";
+            avatarImage.alt = "Profile";
+            avatarImage.className = "avatar-logo-img";
             profileButton.appendChild(avatarImage);
         } else {
             profilePicture.hidden = true;
-            profileButton.textContent =
-                (user.name || "U").trim().charAt(0).toUpperCase();
+            profileButton.innerHTML = `<img src="/static/images/logo.png" alt="Profile" class="avatar-logo-img">`;
         }
 
         googleLoginButton.hidden = true;
@@ -1041,11 +1228,17 @@ async function loadUserProfile() {
 
 function showLoggedOutProfile() {
     currentUser = null;
+    cachedAssessments = [];
     profileName.textContent = "Guest";
     profileEmail.textContent = "";
 
     profilePicture.hidden = true;
-    profileButton.textContent = "U";
+    profileButton.innerHTML = `<img src="/static/images/logo.png" alt="Profile" class="avatar-logo-img">`;
+
+    const heroAvatar = document.getElementById("profile-hero-avatar");
+    if (heroAvatar) {
+        heroAvatar.innerHTML = `<img src="/static/images/logo.png" alt="Profile avatar" class="avatar-hero-img">`;
+    }
 
     googleLoginButton.hidden = false;
     logoutButton.hidden = true;
@@ -1054,6 +1247,26 @@ function showLoggedOutProfile() {
     const welcomeSubtext = document.getElementById("welcome-subtext");
     if (welcomeGreeting) welcomeGreeting.textContent = "Learn something new today.";
     if (welcomeSubtext) welcomeSubtext.textContent = "Practice your knowledge with AI-generated assessments.";
+
+    // Reset metrics
+    const totalEl = document.getElementById("total-assessments");
+    const completedEl = document.getElementById("completed-assessments");
+    const avgEl = document.getElementById("average-score");
+    if (totalEl) totalEl.textContent = "0";
+    if (completedEl) completedEl.textContent = "0";
+    if (avgEl) avgEl.textContent = "—";
+
+    renderRecentAssessmentsTable([]);
+    const myHistoryTbody = document.getElementById("my-assessments-history");
+    if (myHistoryTbody) {
+        myHistoryTbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="empty-state">
+                    Please sign in with Google to view and manage your assessment history.
+                </td>
+            </tr>
+        `;
+    }
 }
 
 profileButton.addEventListener("click", () => {
@@ -1085,6 +1298,7 @@ logoutButton.addEventListener("click", async () => {
         profileButton.setAttribute("aria-expanded", "false");
         await loadProfileView();
         await loadDashboardData();
+        await loadAssessmentsView();
     } catch (error) {
         console.error("Logout failed:", error);
         alert(error.message || "Could not sign out.");
@@ -1105,6 +1319,357 @@ document.addEventListener("click", (event) => {
 });
 
 // ==========================================
+// Loomie AI Tutor & Learning Coach Controller
+// ==========================================
+
+const askLoomieFab = document.getElementById("askloomie-fab");
+const chatDrawer = document.getElementById("chat-drawer");
+const chatOverlay = document.getElementById("chat-overlay");
+const chatCloseBtn = document.getElementById("chat-close-btn");
+const chatClearBtn = document.getElementById("chat-clear-btn");
+const chatModePill = document.getElementById("chat-mode-pill");
+const chatContextBanner = document.getElementById("chat-context-banner");
+const contextDesc = document.getElementById("context-desc");
+const chatDetachContext = document.getElementById("chat-detach-context");
+const chatMessages = document.getElementById("chat-messages");
+const chatSuggestionChips = document.getElementById("chat-suggestion-chips");
+const chatForm = document.getElementById("chat-form");
+const chatInput = document.getElementById("chat-input");
+const chatSendBtn = document.getElementById("chat-send-btn");
+const chatCharCounter = document.getElementById("chat-char-counter");
+const quizHintBtn = document.getElementById("quiz-hint-btn");
+
+let chatHistory = [];
+let currentChatMode = "tutor_general";
+let currentChatContext = null;
+let isGeneratingResponse = false;
+
+function formatMarkdown(text) {
+    if (!text) return "";
+    let safe = escapeHtml(text);
+
+    // Code blocks: ```lang\ncode\n```
+    safe = safe.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+        return `<pre><code class="language-${lang}">${code.trim()}</code></pre>`;
+    });
+
+    // Inline code: `code`
+    safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+    // Bold: **text**
+    safe = safe.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+    // Bullet points: - item or * item
+    safe = safe.replace(/(?:^|\n)[-*]\s+([^\n]+)/g, "\n<li>$1</li>");
+    safe = safe.replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>");
+    safe = safe.replace(/<\/ul>\s*<ul>/g, "");
+
+    // Paragraph line breaks
+    safe = safe.replace(/\n\n+/g, "</p><p>");
+    safe = safe.replace(/\n/g, "<br>");
+
+    return `<p>${safe}</p>`;
+}
+
+function updateModePill(mode) {
+    currentChatMode = mode;
+    if (!chatModePill) return;
+    chatModePill.className = "mode-pill";
+    if (mode === "socratic_hint") {
+        chatModePill.classList.add("socratic");
+        chatModePill.textContent = "Socratic Hint";
+    } else if (mode === "deep_dive_review") {
+        chatModePill.classList.add("review");
+        chatModePill.textContent = "Review Deep-Dive";
+    } else {
+        chatModePill.textContent = "Study Coach";
+    }
+}
+
+function updateContextBanner(context) {
+    currentChatContext = context;
+    if (!chatContextBanner || !contextDesc) return;
+    if (context && (context.question_text || context.topic)) {
+        chatContextBanner.hidden = false;
+        const qNum = context.question_number ? `Q${context.question_number} · ` : "";
+        const topic = context.topic || "Current Session";
+        contextDesc.textContent = `${qNum}${topic}`;
+    } else {
+        chatContextBanner.hidden = true;
+    }
+}
+
+function renderSuggestionChips(mode) {
+    if (!chatSuggestionChips) return;
+    chatSuggestionChips.replaceChildren();
+    let chips = [];
+
+    if (mode === "socratic_hint") {
+        chips = [
+            "💡 Give me a hint",
+            "What core concept is being tested?",
+            "Explain without giving the answer",
+            "Give me a real-world analogy"
+        ];
+    } else if (mode === "deep_dive_review") {
+        chips = [
+            "Why is the correct answer right?",
+            "Show me a code example",
+            "What common mistake causes this?",
+            "How do I prevent this bug in production?"
+        ];
+    } else {
+        chips = [
+            "What should I study today?",
+            "How can I improve my score?",
+            "Explain Python generators vs lists",
+            "Explain SQL indexing best practices"
+        ];
+    }
+
+    chips.forEach(chipText => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "chip-btn";
+        chip.textContent = chipText;
+        chip.addEventListener("click", () => {
+            if (!isGeneratingResponse && chatInput) {
+                chatInput.value = chipText;
+                submitUserMessage();
+            }
+        });
+        chatSuggestionChips.appendChild(chip);
+    });
+}
+
+function appendChatMessage(role, content) {
+    if (!chatMessages) return null;
+    const row = document.createElement("div");
+    row.className = `chat-msg-row ${role}`;
+
+    if (role === "assistant") {
+        const avatar = document.createElement("div");
+        avatar.className = "msg-avatar loomie";
+        avatar.textContent = "✦";
+        row.appendChild(avatar);
+    }
+
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
+    if (role === "assistant") {
+        bubble.innerHTML = formatMarkdown(content);
+    } else {
+        bubble.textContent = content;
+    }
+
+    row.appendChild(bubble);
+    chatMessages.appendChild(row);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return row;
+}
+
+function showTypingIndicator() {
+    if (!chatMessages) return;
+    const row = document.createElement("div");
+    row.id = "chat-typing-indicator";
+    row.className = "chat-msg-row assistant";
+
+    const avatar = document.createElement("div");
+    avatar.className = "msg-avatar loomie";
+    avatar.textContent = "✦";
+    row.appendChild(avatar);
+
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
+    bubble.innerHTML = `
+        <div class="typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+        </div>
+    `;
+    row.appendChild(bubble);
+    chatMessages.appendChild(row);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    const indicator = document.getElementById("chat-typing-indicator");
+    if (indicator) indicator.remove();
+}
+
+function openChatDrawer(mode = "tutor_general", context = null, initialPrompt = null) {
+    if (!chatDrawer || !chatOverlay) return;
+    chatDrawer.hidden = false;
+    chatOverlay.hidden = false;
+
+    updateModePill(mode);
+    updateContextBanner(context);
+    renderSuggestionChips(mode);
+
+    if (chatMessages && chatMessages.children.length === 0) {
+        let greeting = "Hello! I'm Loomie, your Askloom AI Learning Coach. Ask me questions about programming, request study recommendations, or get hints on your quizzes!";
+        if (mode === "socratic_hint") {
+            greeting = "Ready to tackle this question! I won't spoil the answer, but ask me for a hint, a conceptual clue, or code tracing help whenever you're stuck.";
+        } else if (mode === "deep_dive_review") {
+            greeting = "Let's review this question together! Ask me why the correct choice works, what makes other options suboptimal, or request a concrete code example.";
+        }
+        appendChatMessage("assistant", greeting);
+    }
+
+    if (chatInput) {
+        chatInput.focus();
+        if (initialPrompt && !isGeneratingResponse) {
+            chatInput.value = initialPrompt;
+            submitUserMessage();
+        }
+    }
+}
+
+function closeChatDrawer() {
+    if (chatDrawer) chatDrawer.hidden = true;
+    if (chatOverlay) chatOverlay.hidden = true;
+}
+
+function clearChatHistory() {
+    chatHistory = [];
+    if (!chatMessages) return;
+    chatMessages.replaceChildren();
+    let greeting = "Conversation cleared. How can I help you today?";
+    if (currentChatMode === "socratic_hint") {
+        greeting = "Conversation reset. What conceptual hint can I provide for this question?";
+    } else if (currentChatMode === "deep_dive_review") {
+        greeting = "Conversation reset. What aspect of this question would you like to explore?";
+    }
+    appendChatMessage("assistant", greeting);
+}
+
+async function submitUserMessage() {
+    if (!chatInput) return;
+    const text = (chatInput.value || "").trim();
+    if (!text || isGeneratingResponse) return;
+
+    chatInput.value = "";
+    if (chatCharCounter) chatCharCounter.textContent = "0 / 1000";
+    chatInput.style.height = "auto";
+    if (chatSendBtn) chatSendBtn.disabled = true;
+
+    appendChatMessage("user", text);
+    chatHistory.push({ role: "user", content: text });
+
+    isGeneratingResponse = true;
+    showTypingIndicator();
+
+    try {
+        const payload = {
+            message: text,
+            mode: currentChatMode,
+            context: currentChatContext || {},
+            history: chatHistory.slice(-6)
+        };
+
+        const response = await fetch(`${AUTH_API}/chat/message`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(payload)
+        });
+
+        removeTypingIndicator();
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || "Loomie could not generate a response.");
+        }
+
+        const data = await response.json();
+        appendChatMessage("assistant", data.reply);
+        chatHistory.push({ role: "assistant", content: data.reply });
+
+    } catch (error) {
+        removeTypingIndicator();
+        appendChatMessage("assistant", `⚠️ ${error.message || "An unexpected error occurred. Please try again."}`);
+    } finally {
+        isGeneratingResponse = false;
+        if (chatSendBtn && chatInput) {
+            chatSendBtn.disabled = !chatInput.value.trim();
+        }
+        if (chatInput) chatInput.focus();
+    }
+}
+
+// Event Listeners for Loomie AI Tutor
+if (askLoomieFab) {
+    askLoomieFab.addEventListener("click", () => {
+        openChatDrawer("tutor_general");
+    });
+}
+
+if (chatCloseBtn) {
+    chatCloseBtn.addEventListener("click", closeChatDrawer);
+}
+
+if (chatOverlay) {
+    chatOverlay.addEventListener("click", closeChatDrawer);
+}
+
+if (chatClearBtn) {
+    chatClearBtn.addEventListener("click", clearChatHistory);
+}
+
+if (chatDetachContext) {
+    chatDetachContext.addEventListener("click", () => {
+        updateContextBanner(null);
+        updateModePill("tutor_general");
+        renderSuggestionChips("tutor_general");
+    });
+}
+
+if (quizHintBtn) {
+    quizHintBtn.addEventListener("click", () => {
+        const q = questions[currentQuestionIndex];
+        const topicEl = document.getElementById("quiz-topic");
+        const diffEl = document.getElementById("difficulty");
+        const context = {
+            question_number: currentQuestionIndex + 1,
+            question_text: q ? q.question : "",
+            options: q ? q.options : [],
+            topic: topicEl ? topicEl.textContent : "Current Assessment",
+            difficulty: diffEl ? diffEl.value : "Medium"
+        };
+        openChatDrawer(
+            "socratic_hint",
+            context,
+            "Can you give me a Socratic hint for this question without spoiling the answer?"
+        );
+    });
+}
+
+if (chatInput) {
+    chatInput.addEventListener("input", () => {
+        chatInput.style.height = "auto";
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + "px";
+        const len = chatInput.value.length;
+        if (chatCharCounter) chatCharCounter.textContent = `${len} / 1000`;
+        if (chatSendBtn) chatSendBtn.disabled = len === 0 || isGeneratingResponse;
+    });
+
+    chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submitUserMessage();
+        }
+    });
+}
+
+if (chatForm) {
+    chatForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        submitUserMessage();
+    });
+}
+
+// ==========================================
 // Global Window Exports
 // ==========================================
 
@@ -1112,6 +1677,8 @@ window.navigateToView = navigateToView;
 window.showQuizSetup = showQuizSetup;
 window.cancelQuizSetup = cancelQuizSetup;
 window.openPastQuizReview = openPastQuizReview;
+window.openChatDrawer = openChatDrawer;
+window.closeChatDrawer = closeChatDrawer;
 
 // Initialize session and route
 loadUserProfile();
