@@ -7,9 +7,12 @@ const quizForm = document.getElementById("quiz-form");
 const quizScreen = document.getElementById("quiz-screen");
 const resultsScreen = document.getElementById("results-screen");
 
+
 const AUTH_API = (
-    window.ASKLOOM_API_BASE_URL || "http://127.0.0.1:8000"
+    window.ASKLOOM_API_BASE_URL ||
+    "https://askloom-backend-cqnl.onrender.com"
 ).replace(/\/$/, "");
+
 
 let questions = [];
 let currentQuestionIndex = 0;
