@@ -1,9 +1,7 @@
 # Askloom starter file: backend/app/db/database.py
 
-
-
 from collections.abc import Generator
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 
 import psycopg
 from sqlalchemy import create_engine
@@ -18,10 +16,12 @@ def get_connection_details():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is missing. Check backend/.env")
 
-    parsed = urlparse(DATABASE_URL)
+    clean_url = DATABASE_URL.strip().strip('"').strip("'")
+    parsed = urlparse(clean_url)
     port = parsed.port or 5432
+    query_params = dict(parse_qsl(parsed.query))
 
-    return {
+    details = {
         "host": parsed.hostname,
         "port": port,
         "dbname": parsed.path.lstrip("/"),
@@ -29,6 +29,13 @@ def get_connection_details():
         "password": unquote(parsed.password or ""),
         "connect_timeout": 10,
     }
+
+    if "sslmode" in query_params:
+        details["sslmode"] = query_params["sslmode"]
+    elif parsed.hostname and ("supabase" in parsed.hostname or "render" in parsed.hostname):
+        details["sslmode"] = "require"
+
+    return details
 
 
 class Base(DeclarativeBase):
@@ -72,5 +79,3 @@ def test_connection() -> None:
 
 if __name__ == "__main__":
     test_connection()
-
-

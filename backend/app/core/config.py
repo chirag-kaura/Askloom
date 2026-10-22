@@ -15,12 +15,20 @@ if ENV_FILE.exists():
 else:
     load_dotenv(find_dotenv())
 
-GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
-DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
+
+def _clean_env(key: str, default: str = "") -> str:
+    raw = os.getenv(key, default)
+    if not raw:
+        return ""
+    return raw.strip().strip('"').strip("'")
+
+
+GROQ_API_KEY = _clean_env("GROQ_API_KEY")
+DATABASE_URL = _clean_env("DATABASE_URL")
 
 # Google OAuth settings
-GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
-GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
+GOOGLE_CLIENT_ID = _clean_env("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = _clean_env("GOOGLE_CLIENT_SECRET")
 
 # Session security
-SESSION_SECRET = (os.getenv("SESSION_SECRET") or "").strip()
+SESSION_SECRET = _clean_env("SESSION_SECRET")
