@@ -6,14 +6,11 @@ from pathlib import Path
 
 from dotenv import find_dotenv, load_dotenv
 
-# Load .env from project root or find_dotenv
-BACKEND_DIR = Path(__file__).resolve().parents[3]
+# Load .env from the backend directory
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 ENV_FILE = BACKEND_DIR / ".env"
 
-if ENV_FILE.exists():
-    load_dotenv(ENV_FILE)
-else:
-    load_dotenv(find_dotenv())
+load_dotenv(ENV_FILE)
 
 
 def _clean_env(key: str, default: str = "") -> str:
